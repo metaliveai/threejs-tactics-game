@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IsoChess — Wizard's Chess</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="ui">
+    <div id="hud-top">
+      <div id="turn-indicator" class="parchment">White's Turn</div>
+    </div>
+    <div id="hud-bottom">
+      <div id="captured-white" class="parchment captured-tray">
+        <span class="label">White captured:</span>
+        <span class="pieces"></span>
+      </div>
+      <div id="captured-black" class="parchment captured-tray">
+        <span class="label">Black captured:</span>
+        <span class="pieces"></span>
+      </div>
+    </div>
+    <div id="game-over-overlay" class="hidden">
+      <div class="parchment game-over-box">
+        <h2 id="game-over-title">Game Over</h2>
+        <p id="game-over-message"></p>
+        <button id="new-game-btn">New Game</button>
+      </div>
+    </div>
+    <div id="promotion-overlay" class="hidden">
+      <div class="parchment promotion-box">
+        <h3>Promote Pawn</h3>
+        <div id="promotion-choices"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

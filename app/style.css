@@ -1,0 +1,203 @@
+/* Reset */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a12;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  color: #e8d5b7;
+}
+
+/* Full-bleed canvas */
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+/* UI overlay */
+#ui {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#ui > * {
+  pointer-events: auto;
+}
+
+/* Parchment theme */
+.parchment {
+  background: linear-gradient(135deg, #d4b896 0%, #c4a67a 50%, #b8956a 100%);
+  color: #2a1a0e;
+  border: 2px solid #8a6a4a;
+  border-radius: 6px;
+  padding: 8px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  font-family: 'Georgia', serif;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* HUD top bar */
+#hud-top {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  pointer-events: none;
+}
+
+#turn-indicator {
+  font-size: 1.2rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  min-width: 180px;
+  text-align: center;
+}
+
+#turn-indicator.check {
+  border-color: #cc3333;
+  box-shadow: 0 0 12px rgba(204, 51, 51, 0.6), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* HUD bottom bar */
+#hud-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  pointer-events: none;
+}
+
+.captured-tray {
+  font-size: 0.85rem;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.captured-tray .label {
+  opacity: 0.7;
+  font-size: 0.75rem;
+}
+
+.captured-tray .pieces {
+  font-size: 1.1rem;
+  letter-spacing: 2px;
+}
+
+/* Game over overlay */
+#game-over-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+}
+
+.game-over-box {
+  text-align: center;
+  padding: 32px 48px;
+  min-width: 300px;
+}
+
+.game-over-box h2 {
+  font-size: 1.8rem;
+  margin-bottom: 12px;
+}
+
+.game-over-box p {
+  font-size: 1.1rem;
+  margin-bottom: 24px;
+}
+
+#new-game-btn {
+  font-family: 'Georgia', serif;
+  font-size: 1rem;
+  padding: 10px 28px;
+  background: linear-gradient(135deg, #8a6a4a, #6a4a2a);
+  color: #e8d5b7;
+  border: 2px solid #5a3a1a;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+#new-game-btn:hover {
+  background: linear-gradient(135deg, #9a7a5a, #7a5a3a);
+}
+
+/* Promotion overlay */
+#promotion-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.promotion-box {
+  text-align: center;
+  padding: 24px 32px;
+}
+
+.promotion-box h3 {
+  margin-bottom: 16px;
+  font-size: 1.3rem;
+}
+
+#promotion-choices {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+#promotion-choices button {
+  font-family: 'Georgia', serif;
+  font-size: 1.5rem;
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #d4b896, #b8956a);
+  color: #2a1a0e;
+  border: 2px solid #8a6a4a;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+#promotion-choices button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Utility */
+.hidden {
+  display: none !important;
+}
