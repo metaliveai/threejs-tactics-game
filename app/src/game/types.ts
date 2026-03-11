@@ -1,5 +1,6 @@
 import type { Chess, Square as ChessSquare, Move, PieceSymbol, Color } from 'chess.js';
 import type { Object3D } from 'three';
+import type { SpriteAnimator } from './spriteAnimator';
 
 // Re-export chess.js types we use
 export type { Chess, Move, PieceSymbol, Color, ChessSquare };
@@ -7,10 +8,38 @@ export type { Chess, Move, PieceSymbol, Color, ChessSquare };
 export type PieceType = 'k' | 'q' | 'r' | 'b' | 'n' | 'p';
 export type PieceColor = 'w' | 'b';
 
+/** 8 cardinal/diagonal directions */
+export type Direction8 = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
+
 /** Board position in grid coordinates (0-7, 0-7) */
 export interface BoardPos {
   col: number; // 0=a, 7=h
   row: number; // 0=rank1, 7=rank8
+}
+
+/** Frame-based sprite action definition (PixelLab per-frame format) */
+export interface SpriteAction {
+  /** Frame image paths per direction, relative to character root */
+  framePaths: Record<Direction8, string[]>;
+  /** Frame size in pixels */
+  frameSize: { w: number; h: number };
+  /** Animation timing */
+  timing: { frameMs: number; loop: boolean };
+}
+
+/** Full character definition parsed from PixelLab metadata */
+export interface CharacterDef {
+  name: string;
+  root: string;
+  directions: Direction8[];
+  actions: Record<string, SpriteAction>;
+}
+
+/** Mapping of chess piece to character definition key */
+export interface PieceCharacterMap {
+  type: PieceType;
+  color: PieceColor;
+  characterKey: string;
 }
 
 /** A chess piece on the board */
@@ -19,6 +48,7 @@ export interface ChessPiece {
   color: PieceColor;
   square: ChessSquare;
   mesh: Object3D | null;
+  spriteAnimator: SpriteAnimator | null;
   id: string; // unique id e.g. "w-k-e1"
 }
 
@@ -50,8 +80,8 @@ export interface GameState {
   lastMove: Move | null;
 }
 
-/** Camera rotation quarter (0=default, 1=90°, 2=180°, 3=270°) */
-export type CameraQuarter = 0 | 1 | 2 | 3;
+/** Camera rotation step — 8 positions at 45° each (0=default, 1=45°, ..., 7=315°) */
+export type CameraOctant = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** Test seam exposed on window */
 export interface TestSeam {

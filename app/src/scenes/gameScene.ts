@@ -5,8 +5,19 @@ import { BoardGrid } from '../game/grid';
 import { PieceManager } from '../game/pieces';
 import { InputManager } from '../game/input';
 import { UIManager } from '../game/ui';
+import { Choreographer, getDramaLevel } from '../game/choreography';
 import { BOARD, PIECES, ENVIRONMENT } from '../game/config';
+import { squareToPos } from '../game/chess';
 import type { GamePhase, GameState, ChessSquare, PieceType, CapturedPiece, Move } from '../game/types';
+
+/** Calculate move duration based on Chebyshev distance (tiles) between squares */
+function moveDuration(from: ChessSquare, to: ChessSquare): number {
+  const f = squareToPos(from);
+  const t = squareToPos(to);
+  const dist = Math.max(Math.abs(t.col - f.col), Math.abs(t.row - f.row));
+  const raw = dist * PIECES.MOVE_DURATION_PER_TILE;
+  return Math.max(PIECES.MOVE_DURATION_MIN, Math.min(PIECES.MOVE_DURATION_MAX, raw));
+}
 
 /**
  * Main game orchestrator — state machine, game loop, system wiring.
@@ -21,6 +32,7 @@ export class GameScene {
   private pieceManager: PieceManager;
   private input: InputManager;
   private ui: UIManager;
+  private choreographer: Choreographer;
 
   private phase: GamePhase = 'IDLE';
   private selectedSquare: ChessSquare | null = null;
@@ -66,6 +78,9 @@ export class GameScene {
     this.pieceManager = new PieceManager();
     this.scene.add(this.pieceManager.group);
 
+    // Choreographer
+    this.choreographer = new Choreographer();
+
     // Input
     this.input = new InputManager(canvas);
     this.input.setHandler(action => this.handleInput(action));
@@ -74,8 +89,9 @@ export class GameScene {
     this.ui = new UIManager();
     this.ui.setNewGameHandler(() => this.resetGame());
 
-    // Place initial pieces
+    // Place initial pieces (placeholder), then try loading sprites
     this.setupPieces();
+    this.loadSprites();
     this.updateUI();
 
     // Test seam
@@ -87,8 +103,18 @@ export class GameScene {
     // Camera
     this.cameraRig.update(dt);
 
-    // Animations
-    this.activeAnimations = this.activeAnimations.filter(anim => !anim.update(dt));
+    // Camera shake from choreographer
+    this.choreographer.updateShake(dt, this.cameraRig.camera);
+
+    // Animations — mutate in place so external references stay valid
+    for (let i = this.activeAnimations.length - 1; i >= 0; i--) {
+      if (this.activeAnimations[i].update(dt)) {
+        this.activeAnimations.splice(i, 1);
+      }
+    }
+
+    // Sprite animations
+    this.pieceManager.updateSprites(dt, this.cameraRig.octant);
   }
 
   /** Handle resize */
@@ -130,7 +156,14 @@ export class GameScene {
       return;
     }
 
-    const square = this.grid.pickTile(mouse, this.camera);
+    // When a piece is selected, prefer tile picking (for move targets),
+    // fall back to piece picking (for reselecting another piece).
+    // When idle, prefer piece picking (for selecting a character to play).
+    const tileSquare = this.grid.pickTile(mouse, this.camera);
+    const pieceSquare = this.pieceManager.pickPiece(mouse, this.camera);
+    const square = this.phase === 'PIECE_SELECTED'
+      ? (tileSquare ?? pieceSquare)
+      : (pieceSquare ?? tileSquare);
     if (!square) return;
 
     if (this.phase === 'IDLE') {
@@ -199,28 +232,19 @@ export class GameScene {
     this.input.setEnabled(false);
     this.grid.clearOverlays();
 
-    // Handle capture — remove captured piece before move
+    // Detect capture info BEFORE making the engine move
     const capturedPieceInfo = this.engine.pieceAt(to);
     const isEnPassant = this.validMoves.some(m => m.from === from && m.to === to && m.flags.includes('e'));
+    const isCapture = isEnPassant || !!capturedPieceInfo;
 
-    // For en passant, the captured piece is not on 'to' square
-    if (isEnPassant) {
-      const epSquare = (to[0] + from[1]) as ChessSquare;
-      const captured = this.pieceManager.removePieceAt(epSquare);
-      if (captured) {
-        this.capturedPieces.push({ type: captured.type, color: captured.color, id: captured.id });
-      }
-    } else if (capturedPieceInfo) {
-      const captured = this.pieceManager.removePieceAt(to);
-      if (captured) {
-        this.capturedPieces.push({ type: captured.type, color: captured.color, id: captured.id });
-      }
-    }
+    // Get the visual pieces for choreography
+    const attackerVisual = this.pieceManager.getPieceAt(from);
+    const captureSquare = isEnPassant ? (to[0] + from[1]) as ChessSquare : to;
+    const defenderVisual = isCapture ? this.pieceManager.getPieceAt(captureSquare) : undefined;
 
-    // Execute in chess engine
+    // Execute in chess engine first
     const chessMove = this.engine.makeMove(from, to, promotion || undefined);
     if (!chessMove) {
-      // Should not happen — we validated via getValidMoves
       this.phase = 'IDLE';
       this.input.setEnabled(true);
       return;
@@ -228,30 +252,85 @@ export class GameScene {
 
     this.lastMove = chessMove;
 
-    // Handle promotion piece replacement
+    // Handle promotion piece replacement (no choreography)
     if (promotion) {
-      // Remove pawn, add promoted piece
+      // Remove the pawn visual
       this.pieceManager.removePieceAt(from);
+      // Remove captured piece if promotion is also a capture
+      if (defenderVisual) {
+        this.pieceManager.removePieceAt(captureSquare);
+        this.capturedPieces.push({
+          type: defenderVisual.type, color: defenderVisual.color, id: defenderVisual.id,
+        });
+      }
+      // Add promoted piece as sprite (async)
       const color = chessMove.color;
-      this.pieceManager.addPiece(promotion, color, to);
-      this.finishMove();
+      this.pieceManager.addPieceAsync(promotion, color, to).then(() => {
+        this.finishMove();
+      });
       return;
     }
 
-    // Animate piece movement
+    // --- Capture with choreography ---
+    if (isCapture && attackerVisual && defenderVisual) {
+      const dramaLevel = getDramaLevel(attackerVisual.type, defenderVisual.type);
+
+      // Detach defender from map (keeps mesh in scene for fade-out)
+      this.pieceManager.detachPiece(captureSquare);
+
+      // Update piece manager map: attacker moves from→to
+      this.pieceManager.movePiece(from, to);
+
+      // Run choreography (async)
+      this.choreographer.playCaptureSequence({
+        attacker: attackerVisual,
+        defender: defenderVisual,
+        from,
+        to,
+        dramaLevel,
+        pieceManager: this.pieceManager,
+        cameraOctant: this.cameraRig.octant,
+        scene: this.scene,
+        activeAnimations: this.activeAnimations,
+      }).then(() => {
+        // Fully dispose defender after fade
+        this.pieceManager.disposePiece(defenderVisual);
+        this.capturedPieces.push({
+          type: defenderVisual.type, color: defenderVisual.color, id: defenderVisual.id,
+        });
+        this.finishMove();
+      }).catch((err) => {
+        console.error('[Choreography] Capture sequence failed:', err);
+        // Fallback: clean up and finish
+        this.pieceManager.disposePiece(defenderVisual);
+        this.capturedPieces.push({
+          type: defenderVisual.type, color: defenderVisual.color, id: defenderVisual.id,
+        });
+        this.finishMove();
+      });
+
+      return;
+    }
+
+    // --- Normal move (no capture) ---
     const movingPiece = this.pieceManager.movePiece(from, to);
     if (!movingPiece) {
       this.finishMove();
       return;
     }
 
-    const anim = this.pieceManager.animateMove(movingPiece, to, PIECES.MOVE_DURATION, () => {
+    // Set sprite facing direction for the move
+    this.pieceManager.setSpriteDirection(movingPiece, from, to, this.cameraRig.octant);
+
+    const duration = moveDuration(from, to);
+    const anim = this.pieceManager.animateMove(movingPiece, to, duration, () => {
       // Handle castling rook
       if (chessMove.flags.includes('k') || chessMove.flags.includes('q')) {
         const rookAnim = this.pieceManager.handleCastling(
           chessMove as { from: ChessSquare; to: ChessSquare; flags: string },
-          PIECES.MOVE_DURATION,
-          () => this.finishMove()
+          PIECES.MOVE_DURATION_PER_TILE * 2,
+          () => this.finishMove(),
+          this.cameraRig.octant
         );
         if (rookAnim) {
           this.activeAnimations.push(rookAnim);
@@ -318,6 +397,15 @@ export class GameScene {
     this.pieceManager.setupPieces(allPieces);
   }
 
+  /** Load sprite assets and re-setup pieces with sprites if available */
+  private async loadSprites(): Promise<void> {
+    await this.pieceManager.loadCharacters();
+    if (this.pieceManager.useSpriteMode) {
+      const allPieces = this.engine.getAllPieces();
+      await this.pieceManager.setupPiecesAsync(allPieces);
+    }
+  }
+
   resetGame(): void {
     this.engine.reset();
     this.phase = 'IDLE';
@@ -327,7 +415,13 @@ export class GameScene {
     this.lastMove = null;
     this.activeAnimations = [];
 
-    this.setupPieces();
+    // Use async setup if sprites are loaded, sync fallback otherwise
+    if (this.pieceManager.useSpriteMode) {
+      const allPieces = this.engine.getAllPieces();
+      this.pieceManager.setupPiecesAsync(allPieces);
+    } else {
+      this.setupPieces();
+    }
     this.grid.clearOverlays();
     this.ui.reset();
     this.input.setEnabled(true);

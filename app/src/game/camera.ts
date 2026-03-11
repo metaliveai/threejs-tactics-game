@@ -1,16 +1,17 @@
 import * as THREE from 'three';
-import { CAMERA, BOARD } from './config';
-import type { CameraQuarter } from './types';
+import { CAMERA } from './config';
+import type { CameraOctant } from './types';
 
 /**
- * Isometric camera rig with Q/E quarter-turn rotation, zoom, and pan.
+ * Isometric camera rig with Q/E 45° rotation, zoom, and pan.
  * Uses OrthographicCamera for true isometric projection.
+ * 8 rotation stops (0–7) at 45° intervals.
  */
 export class IsometricCamera {
   readonly camera: THREE.OrthographicCamera;
-  private targetQuarter: CameraQuarter = 0;
-  private currentAngle = 0; // radians around Y axis
-  private targetAngle = 0;
+  private targetOctant: CameraOctant = 1;
+  private currentAngle = Math.PI / 4; // radians around Y axis
+  private targetAngle = Math.PI / 4;
   private zoom: number = CAMERA.ZOOM;
 
   /** Pan offset in world space */
@@ -24,19 +25,19 @@ export class IsometricCamera {
     this.camera = new THREE.OrthographicCamera(
       -f * aspect, f * aspect, f, -f, 0.1, 100
     );
-    this.currentAngle = 0;
-    this.targetAngle = 0;
+    this.currentAngle = this.targetOctant * (Math.PI / 4);
+    this.targetAngle = this.targetOctant * (Math.PI / 4);
     this.updateCameraPosition();
   }
 
-  get quarter(): CameraQuarter {
-    return this.targetQuarter;
+  get octant(): CameraOctant {
+    return this.targetOctant;
   }
 
-  /** Rotate camera 90° clockwise (E key) */
+  /** Rotate camera 90° clockwise (E key) — diagonal stops only */
   rotateCW(): void {
-    this.targetQuarter = (((this.targetQuarter as number) + 1) % 4) as CameraQuarter;
-    this.targetAngle = this.targetQuarter * (Math.PI / 2);
+    this.targetOctant = (((this.targetOctant as number) + 2) % 8) as CameraOctant;
+    this.targetAngle = this.targetOctant * (Math.PI / 4);
     // Handle wrap-around for smooth rotation
     while (this.targetAngle - this.currentAngle > Math.PI) {
       this.targetAngle -= Math.PI * 2;
@@ -46,10 +47,10 @@ export class IsometricCamera {
     }
   }
 
-  /** Rotate camera 90° counter-clockwise (Q key) */
+  /** Rotate camera 90° counter-clockwise (Q key) — diagonal stops only */
   rotateCCW(): void {
-    this.targetQuarter = (((this.targetQuarter as number) + 3) % 4) as CameraQuarter;
-    this.targetAngle = this.targetQuarter * (Math.PI / 2);
+    this.targetOctant = (((this.targetOctant as number) + 6) % 8) as CameraOctant;
+    this.targetAngle = this.targetOctant * (Math.PI / 4);
     while (this.targetAngle - this.currentAngle > Math.PI) {
       this.targetAngle -= Math.PI * 2;
     }
@@ -129,10 +130,6 @@ export class IsometricCamera {
 
     // Update frustum for zoom
     const f = CAMERA.FRUSTUM_SIZE / this.zoom;
-    const aspect = this.camera.right !== 0
-      ? (this.camera.right / (CAMERA.FRUSTUM_SIZE / this.zoom) || 1)
-      : 1;
-    // Recalculate with current zoom
     const w = window.innerWidth;
     const h = window.innerHeight;
     const a = w / h;
